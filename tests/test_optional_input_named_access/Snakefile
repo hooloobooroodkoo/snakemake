@@ -1,0 +1,45 @@
+"""
+Named access to missing optional inputs in run: block
+
+Scenario:
+- merge rule has one present count file and one optional count file that is missing
+- counts_present.json exists; counts_missing.json does not
+- downstream rule uses a run: block and accesses input.counts_missing by name
+
+Expected:
+- succeeds
+- run: block detects that input.counts_missing path does not exist via os.path.exists()
+- output records which optional file was absent, proving named access worked without AttributeError
+"""
+
+import os
+
+
+rule all:
+    input:
+        "report.json"
+
+
+rule merge_counts:
+    input:
+        counts_present="counts_present.json",
+        counts_missing=optional("counts_missing.json"),
+    output:
+        "report.json"
+    run:
+        import json
+        from pathlib import Path
+
+        data = json.loads(Path(input.counts_present).read_text())
+
+        # Named access to the missing optional file must not raise AttributeError.
+        # The path is present as an attribute but the file does not exist on disk.
+        missing_path = input.counts_missing
+        missing_detected = not os.path.exists(missing_path)
+
+        result = {
+            "counts": data,
+            "missing_optional_detected": missing_detected,
+            "missing_optional_path": str(missing_path),
+        }
+        Path(output[0]).write_text(json.dumps(result, sort_keys=True))
